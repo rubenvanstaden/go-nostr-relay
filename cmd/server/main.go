@@ -10,13 +10,19 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/rubenvanstaden/go-nostr-relay/core"
+	"github.com/rubenvanstaden/go-nostr-relay/inmem"
+	"github.com/rubenvanstaden/go-nostr-relay/relay"
 )
 
 var addr = flag.String("addr", "localhost:8080", "http service address")
 
 var upgrader = websocket.Upgrader{} // use default options
 
-func socket(w http.ResponseWriter, r *http.Request) {
+type socket struct {
+	relay core.RelayService
+}
+
+func (s *socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -33,34 +39,35 @@ func socket(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-        var tmp []json.RawMessage
+		var tmp []json.RawMessage
 
-        err = json.Unmarshal(message, &tmp)
-        if err != nil {
-            panic(err)
-        }
+		err = json.Unmarshal(message, &tmp)
+		if err != nil {
+			panic(err)
+		}
 
-        msgType, err := core.MessageFromBytes(tmp[0])
+		msgType, err := core.MessageFromBytes(tmp[0])
 
-        var event core.Event
+		switch msgType {
+		case core.MessageEvent:
 
-        switch msgType {
-        case core.MessageEvent:
-            log.Printf("Event: %s", msgType)
-            err = json.Unmarshal(tmp[1], &event)
-            if err != nil {
-                panic(err)
-            }
-        default:
-            panic(fmt.Errorf("unknown message type"))
-        }
+			log.Printf("Event: %s", msgType)
 
-        log.Println(string(tmp[0]))
-        log.Println(event)
+			var event core.Event
+			err = json.Unmarshal(tmp[1], &event)
+			if err != nil {
+				panic(err)
+			}
+
+			s.relay.Publish(&event)
+
+		default:
+			panic(fmt.Errorf("unknown message type"))
+		}
 
 		log.Printf("recv: %s", message)
 
-		err = c.WriteMessage(mt, message)
+		err = c.WriteMessage(mt, []byte("dergigi"))
 		if err != nil {
 			log.Println("write:", err)
 			break
@@ -73,7 +80,14 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	http.HandleFunc("/nostr", socket)
+	repository := inmem.New()
+	service := relay.New(repository)
+
+	h := &socket{
+		relay: service,
+	}
+
+	http.Handle("/", h)
 
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

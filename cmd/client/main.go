@@ -23,7 +23,7 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/nostr"}
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -54,10 +54,10 @@ func main() {
 		case <-done:
 			return
 		case t := <-ticker.C:
-            log.Println(t)
-            // var data = []byte(`["EVENT", "bla"]`)
-            var data = []byte(`["EVENT", {"id": "1"}]`)
-            // var data = []byte(`["EVENT", {"id": "1", "pubkey": "2", "created_at": "0", "kind": 2, "tags": ["e", "", ""], "content": "hello, world", "sig": "3"}]`
+			log.Println(t)
+			// var data = []byte(`["EVENT", "bla"]`)
+			var data = []byte(`["EVENT", {"id": "1"}]`)
+			// var data = []byte(`["EVENT", {"id": "1", "pubkey": "2", "created_at": "0", "kind": 2, "tags": ["e", "", ""], "content": "hello, world", "sig": "3"}]`
 			err := c.WriteMessage(websocket.TextMessage, data)
 			if err != nil {
 				log.Println("write:", err)

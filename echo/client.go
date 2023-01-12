@@ -52,7 +52,7 @@ func main() {
 		case <-done:
 			return
 		case t := <-ticker.C:
-            log.Println(t)
+			log.Println(t)
 			err := c.WriteMessage(websocket.TextMessage, []byte("hello"))
 			if err != nil {
 				log.Println("write:", err)
