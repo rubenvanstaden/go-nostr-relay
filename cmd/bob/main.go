@@ -54,10 +54,9 @@ func main() {
 		case <-done:
 			return
 		case t := <-ticker.C:
+			log.Println("[*] bob pings")
 			log.Println(t)
-			// var data = []byte(`["EVENT", "bla"]`)
-			var data = []byte(`["EVENT", {"id": "1"}]`)
-			// var data = []byte(`["EVENT", {"id": "1", "pubkey": "2", "created_at": "0", "kind": 2, "tags": ["e", "", ""], "content": "hello, world", "sig": "3"}]`
+            var data = []byte(`["REQ", "sub.0", [{"ids":["1","3"],"authors":["alice"]}]]`)
 			err := c.WriteMessage(websocket.TextMessage, data)
 			if err != nil {
 				log.Println("write:", err)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -28,7 +29,7 @@ type Client struct {
 	conn *websocket.Conn
 
 	// Buffered channel of outbound event messages.
-	send chan *core.Event
+	send chan *core.RelayEvent
 
 	// A set of subscribed filters to be applied before adding events to the outbound channel.
 	subscriptions map[core.SubId]*core.Filter
@@ -41,10 +42,35 @@ func newClient(hub *Hub, conn *websocket.Conn, repository core.EventRepository) 
 	return &Client{
 		hub:           hub,
 		conn:          conn,
-		send:          make(chan *core.Event, 100),
+		send:          make(chan *core.RelayEvent, 100),
 		subscriptions: make(map[core.SubId]*core.Filter),
 		events:        repository,
 	}
+}
+
+func (s *Client) validSubId(id core.SubId) error {
+
+	if subId, found := s.subscriptions[id]; found {
+		return core.Errorf(core.ErrorConflict, "Subscription ID already stored: %s", subId)
+	}
+
+	return nil
+}
+
+func (s *Client) subscribed(e *core.Event) *core.RelayEvent {
+
+	for id, filter := range s.subscriptions {
+		for _, eid := range filter.Ids {
+			if eid == e.Id {
+				return &core.RelayEvent{
+					SubId: id,
+					Event: e,
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *Client) read() {
@@ -57,7 +83,9 @@ func (s *Client) read() {
 
 	for {
 
-		msgType, message, err := s.conn.ReadMessage()
+		// If wsType=1 then its a text message.
+		// TODO: Implement support with close message type.
+		wsType, message, err := s.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -65,21 +93,59 @@ func (s *Client) read() {
 			break
 		}
 
-		log.Printf("read msg type: %d", msgType)
+		log.Printf("read msg type: %d", wsType)
 
-		msg := core.DecodeClientMessage(message)
+		//msg := core.DecodeClientMessage(message)
 
-		switch msg.Type {
+		var tmp []json.RawMessage
+
+		err = json.Unmarshal(message, &tmp)
+		if err != nil {
+			log.Fatalln("unable to unmarshal client msg")
+		}
+
+		// Set message type from first array item.
+		msgType := core.DecodeMessageType(tmp[0])
+
+		switch msgType {
 		case core.MessageEvent:
-			if msg.Event.Kind == 0 {
-				s.setMetadata(msg.Event)
-			} else if msg.Event.Kind == 1 {
-				s.textNote(msg.Event)
-			} else if msg.Event.Kind == 2 {
-				s.recommendServer(msg.Event)
+
+			var event core.Event
+			err = json.Unmarshal(tmp[1], &event)
+			if err != nil {
+				panic(err)
+			}
+
+			if event.Kind == 0 {
+				s.setMetadata(&event)
+			} else if event.Kind == 1 {
+				s.textNote(&event)
+			} else if event.Kind == 2 {
+				s.recommendServer(&event)
 			}
 		case core.MessageRequest:
-			fmt.Println("not implemented")
+
+			var subId core.SubId
+			err = json.Unmarshal(tmp[1], &subId)
+			if err != nil {
+				panic(err)
+			}
+
+			err = s.validSubId(subId)
+			if err != nil {
+				panic(err)
+			}
+
+			var filters []*core.Filter
+			err = json.Unmarshal(tmp[2], &filters)
+			if err != nil {
+				panic(err)
+			}
+
+            err := s.request(subId, filters)
+			if err != nil {
+				panic(err)
+			}
 		case core.MessageClose:
 			fmt.Println("not implemented")
 		default:
@@ -109,20 +175,15 @@ func (s *Client) write() {
 				return
 			}
 
-			// TODO
-			// Get subscription that allows event to be broadcasted to client.
-			// Send a relay notice if errors occur.
-
-			e := core.RelayEvent{
-				SubId: core.SubId("123"),
-				Event: event,
-			}
-
-			err := s.conn.WriteMessage(websocket.TextMessage, e.Encode())
+			err := s.conn.WriteMessage(websocket.TextMessage, event.Encode())
 			if err != nil {
 				log.Println("ERROR write:", err)
 				return
 			}
+
+			// TODO
+			// Send a relay notice if errors occur.
+
 		case <-ticker.C:
 			s.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			err := s.conn.WriteMessage(websocket.PingMessage, nil)
@@ -131,6 +192,31 @@ func (s *Client) write() {
 			}
 		}
 	}
+}
+
+func (s *Client) request(subId core.SubId, filters []*core.Filter) error {
+
+    log.Println("requesting")
+
+	for _, filter := range filters {
+
+		for _, id := range filter.Ids {
+
+            event, err := s.events.FindById(id)
+            if err != nil {
+                return err
+            }
+
+            e := &core.RelayEvent{
+                SubId: subId,
+                Event: event,
+            }
+
+            s.send <- e
+        }
+	}
+
+	return nil
 }
 
 func (s *Client) setMetadata(event *core.Event) error {
@@ -142,10 +228,13 @@ func (s *Client) setMetadata(event *core.Event) error {
 func (s *Client) textNote(event *core.Event) error {
 
 	// Store event to be pulled and filtered by future subscribers.
-	s.events.Store(event)
+	err := s.events.Store(event)
+	if err != nil {
+		panic(err)
+	}
 
-	// After the event is stored broadcast t to all registered clients.
-	s.hub.broadcast <- event
+	// After the event is stored broadcast it to all registered clients.
+	s.hub.Broadcast(event)
 
 	return nil
 }

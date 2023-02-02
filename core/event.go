@@ -2,13 +2,12 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
 // https://github.com/nostr-protocol/nips/blob/master/01.md
 
-type MessageType uint8
+type MessageType uint64
 
 const (
 	MessageUnknown MessageType = iota + 1
@@ -52,7 +51,7 @@ type EventId string
 
 type Event struct {
 	Id      EventId `json:"id"`
-	Kind    uint8   `json:"kind"`
+	Kind    uint8   `json:"kind,string"`
 	Content string  `json:"content"`
 	// Pubkey    string  `json:"pubkey"`
 	// CreatedAt string  `json:"created_at"`
@@ -72,79 +71,4 @@ type SubId string
 
 func (s SubId) String() string {
 	return string(s)
-}
-
-type Filter struct {
-}
-
-type RelayNotice struct {
-	Message string `json:"message"`
-}
-
-func (s RelayNotice) Encode() []byte {
-
-	array := []string{"NOTICE", s.Message}
-
-	bytes, err := json.Marshal(array)
-	if err != nil {
-		panic(err)
-	}
-
-	return bytes
-}
-
-type RelayEvent struct {
-	SubId SubId  `json:"sub_id"`
-	Event *Event `json:"event"`
-}
-
-func (s RelayEvent) Encode() []byte {
-
-	array := []string{"EVENT", s.SubId.String(), s.Event.String()}
-
-	bytes, err := json.Marshal(array)
-	if err != nil {
-		panic(err)
-	}
-
-	return bytes
-}
-
-type ClientMessage struct {
-	Type   MessageType `json:"message_type"`
-	SubId  SubId       `json:"sub_id"`
-	Event  *Event      `json:"event"`
-	Filter Filter      `json:"filter"`
-}
-
-func DecodeClientMessage(data []byte) *ClientMessage {
-
-	var tmp []json.RawMessage
-
-	err := json.Unmarshal(data, &tmp)
-	if err != nil {
-		panic(err)
-	}
-
-	msg := &ClientMessage{}
-
-	// Set message type from first array item.
-	msg.Type = DecodeMessageType(tmp[0])
-
-	// Set message data from second array item.
-	switch msg.Type {
-	case MessageEvent:
-		err = json.Unmarshal(tmp[1], msg.Event)
-		if err != nil {
-			panic(err)
-		}
-	default:
-		panic(fmt.Errorf("unknown message type"))
-	}
-
-	return msg
-}
-
-func EncodeRelayMessage() {
-
 }

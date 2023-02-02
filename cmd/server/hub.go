@@ -9,7 +9,7 @@ type Hub struct {
 	clients map[*Client]struct{}
 
 	// Inbound events from the clients that should be broadcasted to subscribed clients.
-	broadcast chan *core.Event
+	events chan *core.Event
 
 	// Connected clients. Register requests from the clients.
 	register chan *Client
@@ -20,11 +20,15 @@ type Hub struct {
 
 func newHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan *core.Event),
+		events:     make(chan *core.Event),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]struct{}),
 	}
+}
+
+func (s *Hub) Broadcast(event *core.Event) {
+	s.events <- event
 }
 
 // Listens to registered and unregistered client and incoming messages.
@@ -39,13 +43,18 @@ func (h *Hub) run() {
 				delete(h.clients, client)
 				close(client.send)
 			}
-		case event := <-h.broadcast:
+		case event := <-h.events:
 			for client := range h.clients {
-				select {
-				case client.send <- event:
-				default:
-					close(client.send)
-					delete(h.clients, client)
+
+				relayEvent := client.subscribed(event)
+
+				if relayEvent != nil {
+					select {
+					case client.send <- relayEvent:
+					default:
+						close(client.send)
+						delete(h.clients, client)
+					}
 				}
 			}
 		}

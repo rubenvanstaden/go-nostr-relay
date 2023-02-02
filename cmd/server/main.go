@@ -18,59 +18,6 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// func (s *socket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-//
-// 	c, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		log.Print("upgrade:", err)
-// 		return
-// 	}
-// 	defer c.Close()
-//
-// 	for {
-//
-// 		mt, message, err := c.ReadMessage()
-// 		if err != nil {
-// 			log.Println("read:", err)
-// 			break
-// 		}
-//
-// 		var tmp []json.RawMessage
-//
-// 		err = json.Unmarshal(message, &tmp)
-// 		if err != nil {
-// 			panic(err)
-// 		}
-//
-// 		msgType, err := core.MessageFromBytes(tmp[0])
-//
-// 		switch msgType {
-// 		case core.MessageEvent:
-//
-// 			log.Printf("Event: %s", msgType)
-//
-// 			var event core.Event
-// 			err = json.Unmarshal(tmp[1], &event)
-// 			if err != nil {
-// 				panic(err)
-// 			}
-//
-// 			s.relay.Publish(&event)
-//
-// 		default:
-// 			panic(fmt.Errorf("unknown message type"))
-// 		}
-//
-// 		log.Printf("recv: %s", message)
-//
-// 		err = c.WriteMessage(mt, []byte("dergigi"))
-// 		if err != nil {
-// 			log.Println("write:", err)
-// 			break
-// 		}
-// 	}
-// }
-
 type socket struct {
 	hub             *Hub
 	eventRepository core.EventRepository
