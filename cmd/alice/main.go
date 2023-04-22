@@ -13,7 +13,7 @@ import (
 
 // Alice pushes events to the relay that will be consumed by Bob at every ticker.
 
-var addr = flag.String("addr", "localhost:8080", "http service address")
+var   addr = flag.String("addr", "localhost:8080", "http service address")
 
 var e1 = `{"id":"1","kind":"1","content":"hello world 1"}`
 var e2 = `{"id":"2","kind":"1","content":"hello world 2"}`
@@ -30,6 +30,7 @@ func main() {
 	u := url.URL{Scheme: "ws", Host: *addr, Path: "/"}
 	log.Printf("connecting to %s", u.String())
 
+:q
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		log.Fatal("dial:", err)

@@ -1,11 +1,11 @@
 package core
 
+// https://github.com/nostr-protocol/nips/blob/master/01.md
+
 import (
 	"encoding/json"
 	"strings"
 )
-
-// https://github.com/nostr-protocol/nips/blob/master/01.md
 
 type MessageType uint64
 
